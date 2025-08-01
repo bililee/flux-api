@@ -2,7 +2,6 @@ package com.bililee.demo.fluxapi.controller;
 
 import com.bililee.demo.fluxapi.model.ApiRequest;
 import com.bililee.demo.fluxapi.model.ApiResponse;
-import com.bililee.demo.fluxapi.model.RestApiResult;
 import com.bililee.demo.fluxapi.service.ApiDataService;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
