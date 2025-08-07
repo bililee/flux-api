@@ -1,0 +1,387 @@
+graph TD
+    %% 用户层
+    subgraph UserLayer["`👥 **用户访问层**`"]
+        MobileApp["`📱 **移动应用**
+        iOS/Android`"]
+        WebApp["`🌐 **Web前端**
+        React/Vue`"]
+        ThirdPartyAPI["`🔗 **第三方系统**
+        合作伙伴API`"]
+        InternalTools["`🛠️ **内部工具**
+        管理后台`"]
+    end
+    
+    %% CDN和安全层
+    subgraph SecurityLayer["`🔒 **安全防护层**`"]
+        CDN["`⚡ **CDN**
+        - 全球加速
+        - 静态资源缓存
+        - DDoS防护`"]
+        
+        WAF["`🛡️ **WAF**
+        - Web应用防火墙
+        - 攻击防护
+        - 流量清洗`"]
+    end
+    
+    %% 负载均衡层
+    subgraph LoadBalancerLayer["`⚖️ **负载均衡层**`"]
+        SLB["`🔄 **负载均衡器**
+        - 四层负载均衡
+        - 健康检查
+        - 自动故障转移`"]
+    end
+    
+    %% API网关层
+    subgraph GatewayLayer["`🚪 **API网关层**`"]
+        APISIX["`🎯 **Apache APISIX**
+        - 动态路由
+        - 认证授权
+        - 限流熔断
+        - 插件扩展
+        - JWT验证
+        - API版本管理`"]
+        
+        GatewayAdmin["`⚙️ **APISIX Dashboard**
+        - 可视化管理
+        - 路由配置
+        - 插件管理`"]
+    end
+    
+    %% 应用服务层 - Kubernetes集群
+    subgraph K8sCluster["`☸️ **Kubernetes 生产集群**`"]
+        subgraph FluxAPINamespace["`📦 **flux-api-prod Namespace**`"]
+            FluxPod1["`🟢 **flux-api-1**
+            Replicas: 3
+            CPU: 2000m
+            Memory: 4Gi
+            JVM: -Xms2g -Xmx3g`"]
+            
+            FluxPod2["`🟢 **flux-api-2**
+            Replicas: 3  
+            CPU: 2000m
+            Memory: 4Gi
+            JVM: -Xms2g -Xmx3g`"]
+            
+            FluxPod3["`🟢 **flux-api-3**
+            Replicas: 3
+            CPU: 2000m
+            Memory: 4Gi  
+            JVM: -Xms2g -Xmx3g`"]
+        end
+        
+        subgraph JobNamespace["`⏰ **job-system Namespace**`"]
+            XXLJobAdmin["`📋 **XXL-Job Admin**
+            - 任务调度中心
+            - 可视化管理
+            - 执行监控`"]
+            
+            XXLJobExecutor["`⚙️ **XXL-Job Executor**
+            - 任务执行器
+            - 定时任务
+            - 数据同步作业`"]
+        end
+        
+        subgraph MonitoringNamespace["`📊 **monitoring Namespace**`"]
+            PrometheusServer["`📈 **Prometheus**
+            - 指标收集
+            - 告警规则
+            - 数据存储`"]
+            
+            GrafanaServer["`📊 **Grafana**
+            - 可视化面板
+            - 告警仪表板
+            - 业务大屏`"]
+            
+            PumiAPM["`🔍 **普米APM**
+            - 应用性能监控
+            - 链路追踪
+            - 错误分析
+            - 慢查询监控`"]
+            
+            AlertManager["`🚨 **AlertManager**
+            - 告警路由
+            - 静默管理
+            - 通知发送`"]
+        end
+        
+        subgraph K8sInfra["`🔧 **K8s基础设施**`"]
+            IngressNginx["`🌐 **Ingress-Nginx**
+            - 七层负载均衡
+            - SSL终止
+            - 路径路由`"]
+            
+            HPA["`📊 **HPA**
+            - 自动水平伸缩
+            - CPU/内存指标
+            - 自定义指标`"]
+            
+            VPA["`📏 **VPA**
+            - 垂直Pod伸缩
+            - 资源推荐`"]
+        end
+    end
+    
+    %% 配置中心
+    subgraph ConfigCenter["`⚙️ **配置中心**`"]
+        NacosCluster["`🎛️ **Nacos集群**
+        - 配置管理
+        - 服务发现
+        - 健康检查
+        - 配置热更新`"]
+        
+        K8sConfigMap["`📋 **ConfigMap**
+        - K8s原生配置
+        - 环境变量`"]
+        
+        K8sSecret["`🔐 **Secret**
+        - 敏感信息
+        - 数据库密码
+        - API密钥`"]
+        
+        Apollo["`🚀 **Apollo**
+        - 分布式配置
+        - 灰度发布
+        - 配置审计`"]
+    end
+    
+    %% 缓存层
+    subgraph CacheLayer["`📦 **缓存存储层**`"]
+        LocalCache["`💾 **应用内缓存**
+        - Caffeine Cache
+        - JVM Heap
+        - 毫秒级响应`"]
+        
+        RedisCluster["`🔴 **Redis集群**
+        - 主从复制
+        - 哨兵模式
+        - 分布式锁
+        - 会话存储`"]
+        
+        Redissentinel["`👁️ **Redis Sentinel**
+        - 高可用监控
+        - 自动故障转移`"]
+    end
+    
+    %% 数据库层
+    subgraph DatabaseLayer["`💾 **数据库层**`"]
+        PostgreSQLMaster["`🐘 **PostgreSQL主库**
+        - 业务数据存储
+        - 事务处理
+        - ACID保证`"]
+        
+        PostgreSQLSlave["`📖 **PostgreSQL从库**
+        - 读写分离
+        - 数据备份
+        - 报表查询`"]
+        
+        MongoDB["`🍃 **MongoDB集群**
+        - 文档存储
+        - 日志数据
+        - 分片集群`"]
+        
+        ClickHouse["`⚡ **ClickHouse**
+        - 分析数据库
+        - 大数据分析
+        - 实时统计`"]
+        
+        ElasticSearch["`🔍 **Elasticsearch**
+        - 全文搜索
+        - 日志存储
+        - 数据分析`"]
+    end
+    
+    %% 消息队列
+    subgraph MessageQueue["`📨 **消息队列**`"]
+        RocketMQ["`🚀 **RocketMQ**
+        - 异步消息
+        - 事务消息
+        - 顺序消息`"]
+        
+        Kafka["`⚡ **Kafka集群**
+        - 大数据流处理
+        - 日志收集
+        - 事件流`"]
+    end
+    
+    %% 外部服务依赖
+    subgraph ExternalServices["`🌐 **外部服务依赖**`"]
+        DataProvider["`📊 **数据服务商**
+        - 金融数据API
+        - 实时行情
+        - 历史数据`"]
+        
+        PaymentGateway["`💳 **支付网关**
+        - 支付宝/微信
+        - 银联支付
+        - 快捷支付`"]
+        
+        SMSService["`📱 **短信服务**
+        - 验证码发送
+        - 营销短信
+        - 告警通知`"]
+        
+        EmailService["`📧 **邮件服务**
+        - 系统邮件
+        - 营销邮件
+        - 告警邮件`"]
+    end
+    
+    %% 日志收集
+    subgraph LoggingStack["`📋 **日志收集系统**`"]
+        Filebeat["`📄 **Filebeat**
+        - 日志采集
+        - 轻量级Agent`"]
+        
+        Logstash["`🔄 **Logstash**
+        - 日志处理
+        - 数据转换
+        - 格式化`"]
+        
+        Kibana["`📊 **Kibana**
+        - 日志可视化
+        - 搜索分析
+        - 仪表板`"]
+    end
+    
+    %% 对象存储
+    subgraph ObjectStorage["`☁️ **对象存储**`"]
+        OSS["`📦 **阿里云OSS**
+        - 文件存储
+        - 静态资源
+        - 数据备份`"]
+        
+        MinIO["`🗄️ **MinIO**
+        - 私有对象存储
+        - S3兼容
+        - 数据归档`"]
+    end
+    
+    %% 网络连接关系
+    MobileApp --> CDN
+    WebApp --> CDN
+    ThirdPartyAPI --> WAF
+    InternalTools --> WAF
+    
+    CDN --> WAF
+    WAF --> SLB
+    SLB --> APISIX
+    APISIX --> IngressNginx
+    
+    IngressNginx --> FluxPod1
+    IngressNginx --> FluxPod2
+    IngressNginx --> FluxPod3
+    
+    %% 应用连接缓存和数据库
+    FluxPod1 --> LocalCache
+    FluxPod2 --> LocalCache
+    FluxPod3 --> LocalCache
+    
+    FluxPod1 --> RedisCluster
+    FluxPod2 --> RedisCluster
+    FluxPod3 --> RedisCluster
+    
+    FluxPod1 --> PostgreSQLMaster
+    FluxPod2 --> PostgreSQLSlave
+    FluxPod3 --> MongoDB
+    
+    %% 配置中心连接
+    NacosCluster --> FluxPod1
+    NacosCluster --> FluxPod2
+    NacosCluster --> FluxPod3
+    Apollo --> FluxPod1
+    Apollo --> FluxPod2
+    Apollo --> FluxPod3
+    
+    K8sConfigMap --> FluxPod1
+    K8sConfigMap --> FluxPod2
+    K8sConfigMap --> FluxPod3
+    
+    %% 定时任务连接
+    XXLJobAdmin --> XXLJobExecutor
+    XXLJobExecutor --> PostgreSQLMaster
+    XXLJobExecutor --> FluxPod1
+    
+    %% 监控连接
+    FluxPod1 --> PrometheusServer
+    FluxPod2 --> PrometheusServer
+    FluxPod3 --> PrometheusServer
+    FluxPod1 --> PumiAPM
+    FluxPod2 --> PumiAPM
+    FluxPod3 --> PumiAPM
+    
+    PrometheusServer --> GrafanaServer
+    PrometheusServer --> AlertManager
+    
+    %% 日志连接
+    FluxPod1 --> Filebeat
+    FluxPod2 --> Filebeat
+    FluxPod3 --> Filebeat
+    Filebeat --> Logstash
+    Logstash --> ElasticSearch
+    ElasticSearch --> Kibana
+    
+    %% 消息队列连接
+    FluxPod1 --> RocketMQ
+    FluxPod2 --> Kafka
+    FluxPod3 --> RocketMQ
+    
+    %% 外部服务连接
+    FluxPod1 --> DataProvider
+    FluxPod2 --> PaymentGateway
+    FluxPod3 --> SMSService
+    FluxPod1 --> EmailService
+    
+    %% 对象存储连接
+    FluxPod1 --> OSS
+    FluxPod2 --> MinIO
+    
+    %% 数据库复制
+    PostgreSQLMaster --> PostgreSQLSlave
+    Redissentinel --> RedisCluster
+    
+    %% 管理界面
+    GatewayAdmin --> APISIX
+    XXLJobAdmin --> XXLJobExecutor
+    
+    %% HPA监控连接
+    HPA --> FluxPod1
+    HPA --> FluxPod2
+    HPA --> FluxPod3
+    VPA --> FluxPod1
+    VPA --> FluxPod2
+    VPA --> FluxPod3
+    
+    %% 样式定义
+    classDef userStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef securityStyle fill:#ffebee,stroke:#d32f2f,stroke-width:2px
+    classDef lbStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef gatewayStyle fill:#fff8e1,stroke:#f57f17,stroke-width:2px
+    classDef podStyle fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px
+    classDef jobStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef monitoringStyle fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    classDef infraStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef configStyle fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef cacheStyle fill:#fff3e0,stroke:#ff8f00,stroke-width:2px
+    classDef dbStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef mqStyle fill:#f9fbe7,stroke:#827717,stroke-width:2px
+    classDef externalStyle fill:#efebe9,stroke:#5d4037,stroke-width:2px
+    classDef logStyle fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef storageStyle fill:#fafafa,stroke:#424242,stroke-width:2px
+    
+    %% 应用样式
+    class MobileApp,WebApp,ThirdPartyAPI,InternalTools userStyle
+    class CDN,WAF securityStyle
+    class SLB lbStyle
+    class APISIX,GatewayAdmin gatewayStyle
+    class FluxPod1,FluxPod2,FluxPod3 podStyle
+    class XXLJobAdmin,XXLJobExecutor jobStyle
+    class PrometheusServer,GrafanaServer,PumiAPM,AlertManager monitoringStyle
+    class IngressNginx,HPA,VPA infraStyle
+    class NacosCluster,K8sConfigMap,K8sSecret,Apollo configStyle
+    class LocalCache,RedisCluster,Redissentinel cacheStyle
+    class PostgreSQLMaster,PostgreSQLSlave,MongoDB,ClickHouse,ElasticSearch dbStyle
+    class RocketMQ,Kafka mqStyle
+    class DataProvider,PaymentGateway,SMSService,EmailService externalStyle
+    class Filebeat,Logstash,Kibana logStyle
+    class OSS,MinIO storageStyle

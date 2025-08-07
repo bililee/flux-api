@@ -1,0 +1,95 @@
+graph TD
+    %% 应用层
+    subgraph AppLayer["`🚀 **应用服务层**`"]
+        FluxAPI["`⚡ **Flux API**
+        Spring WebFlux
+        反应式架构`"]
+    end
+    
+    %% 网关层
+    subgraph GatewayLayer["`🚪 **API网关**`"]
+        APISIX["`🎯 **Apache APISIX**
+        - 动态路由
+        - 认证授权  
+        - 限流熔断`"]
+    end
+    
+    %% 缓存层
+    subgraph CacheLayer["`📦 **缓存层**`"]
+        LocalCache["`💾 **本地缓存**
+        Caffeine`"]
+        Redis["`🔴 **Redis**
+        分布式缓存`"]
+    end
+    
+    %% 数据库层
+    subgraph DatabaseLayer["`💾 **数据库**`"]
+        PostgreSQL["`🐘 **PostgreSQL**
+        主业务数据库`"]
+        MongoDB["`🍃 **MongoDB**
+        文档存储`"]
+    end
+    
+    %% 任务调度
+    subgraph JobLayer["`⏰ **任务调度**`"]
+        XXLJob["`📋 **XXL-Job**
+        分布式任务调度`"]
+    end
+    
+    %% 监控APM
+    subgraph MonitoringLayer["`📊 **监控APM**`"]
+        PumiAPM["`🔍 **普米APM**
+        应用性能监控`"]
+        Prometheus["`📈 **Prometheus**
+        指标收集`"]
+        Grafana["`📊 **Grafana**
+        可视化面板`"]
+    end
+    
+    %% 配置中心
+    subgraph ConfigLayer["`⚙️ **配置中心**`"]
+        Nacos["`🎛️ **Nacos**
+        配置管理`"]
+    end
+    
+    %% 外部依赖
+    subgraph ExternalLayer["`🌐 **外部服务**`"]
+        DataProvider["`📊 **数据服务商**
+        实时数据API`"]
+    end
+    
+    %% 连接关系
+    APISIX --> FluxAPI
+    FluxAPI --> LocalCache
+    FluxAPI --> Redis
+    FluxAPI --> PostgreSQL
+    FluxAPI --> MongoDB
+    FluxAPI --> DataProvider
+    
+    XXLJob --> FluxAPI
+    XXLJob --> PostgreSQL
+    
+    FluxAPI --> PumiAPM
+    FluxAPI --> Prometheus
+    Prometheus --> Grafana
+    
+    Nacos --> FluxAPI
+    
+    %% 样式
+    classDef appStyle fill:#e8eaf6,stroke:#3f51b5,stroke-width:3px
+    classDef gatewayStyle fill:#fff8e1,stroke:#f57f17,stroke-width:2px
+    classDef cacheStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef dbStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef jobStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef monitoringStyle fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    classDef configStyle fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef externalStyle fill:#efebe9,stroke:#5d4037,stroke-width:2px
+    
+    class FluxAPI appStyle
+    class APISIX gatewayStyle
+    class LocalCache,Redis cacheStyle
+    class PostgreSQL,MongoDB dbStyle
+    class XXLJob jobStyle
+    class PumiAPM,Prometheus,Grafana monitoringStyle
+    class Nacos configStyle
+    class DataProvider externalStyle

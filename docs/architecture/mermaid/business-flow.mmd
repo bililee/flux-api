@@ -1,0 +1,98 @@
+flowchart TD
+    %% 用户请求
+    Start(["`👤 **用户请求**
+    API调用`"]) 
+    
+    %% API网关
+    Gateway{"`🚪 **APISIX网关**
+    认证 & 限流`"}
+    
+    %% 控制器
+    Controller["`🎯 **控制器层**
+    参数验证`"]
+    
+    %% 缓存检查
+    CacheCheck{"`📦 **缓存检查**
+    本地 + Redis`"}
+    
+    %% 缓存命中
+    CacheHit["`✅ **缓存命中**
+    直接返回`"]
+    
+    %% 请求去重
+    Dedup{"`🔀 **请求去重**
+    相同请求合并`"}
+    
+    %% 远程调用
+    RemoteCall["`🌐 **远程调用**
+    数据服务商`"]
+    
+    %% 重试机制
+    Retry{"`🔄 **重试机制**
+    指数退避`"}
+    
+    %% 降级处理
+    Fallback["`🛡️ **降级处理**
+    返回过期数据`"]
+    
+    %% 缓存更新
+    CacheUpdate["`📝 **缓存更新**
+    存储新数据`"]
+    
+    %% APM监控
+    APM["`📊 **APM监控**
+    普米指标收集`"]
+    
+    %% 返回响应
+    Response(["`📤 **返回响应**
+    JSON格式`"])
+    
+    %% XXL-Job任务
+    XXLJob["`⏰ **XXL-Job**
+    定时数据同步`"]
+    
+    %% 流程连接
+    Start --> Gateway
+    Gateway -->|通过| Controller
+    Gateway -->|拒绝| Response
+    
+    Controller --> CacheCheck
+    CacheCheck -->|命中| CacheHit
+    CacheCheck -->|未命中| Dedup
+    
+    CacheHit --> APM
+    
+    Dedup -->|新请求| RemoteCall
+    Dedup -->|重复请求| CacheHit
+    
+    RemoteCall -->|成功| CacheUpdate
+    RemoteCall -->|失败| Retry
+    
+    Retry -->|重试成功| CacheUpdate
+    Retry -->|重试失败| Fallback
+    
+    CacheUpdate --> APM
+    Fallback --> APM
+    
+    APM --> Response
+    
+    %% 后台任务
+    XXLJob -.->|定时同步| RemoteCall
+    
+    %% 样式定义
+    classDef startEndStyle fill:#e8f5e8,stroke:#4caf50,stroke-width:3px
+    classDef gatewayStyle fill:#fff8e1,stroke:#ff9800,stroke-width:2px
+    classDef processStyle fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    classDef cacheStyle fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    classDef remoteStyle fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
+    classDef monitorStyle fill:#e0f2f1,stroke:#009688,stroke-width:2px
+    classDef jobStyle fill:#fff3e0,stroke:#ff5722,stroke-width:2px
+    
+    %% 应用样式
+    class Start,Response startEndStyle
+    class Gateway gatewayStyle
+    class Controller,Dedup processStyle
+    class CacheCheck,CacheHit,CacheUpdate,Fallback cacheStyle
+    class RemoteCall,Retry remoteStyle
+    class APM monitorStyle
+    class XXLJob jobStyle

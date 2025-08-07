@@ -86,3 +86,6 @@ public class GlobalExceptionHandler {
     }
 }
 
+
+Coding Style:
+1. Code and comments cannot be written on the same line.
