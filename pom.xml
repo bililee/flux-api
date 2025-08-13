@@ -126,11 +126,4 @@
             </plugin>
         </plugins>
     </build>
-    <!-- 添加 JitPack 仓库 -->
-    <repositories>
-        <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
-        </repository>
-    </repositories>
 </project>

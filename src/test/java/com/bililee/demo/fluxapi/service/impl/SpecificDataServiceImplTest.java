@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import java.time.Duration;
 import java.util.List;
@@ -573,7 +574,7 @@ class SpecificDataServiceImplTest {
 
     private SpecificDataResponse createTestResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)
@@ -595,7 +596,7 @@ class SpecificDataServiceImplTest {
 
     private SpecificDataResponse createStaleResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success (stale)")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(1)

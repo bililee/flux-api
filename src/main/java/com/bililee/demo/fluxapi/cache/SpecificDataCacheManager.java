@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
@@ -72,15 +72,55 @@ public class SpecificDataCacheManager {
         staleCache = Caffeine.newBuilder()
                 .maximumSize(1000)
                 .expireAfterWrite(Duration.ofHours(1))
+                .recordStats()
                 .build();
                 
         primaryCache = Caffeine.newBuilder()
                 .maximumSize(5000)
                 .expireAfterWrite(Duration.ofMinutes(15))
+                .recordStats()
+                .removalListener((key, value, cause) -> {
+                    try {
+                        log.debug("缓存移除: {} - {}", key, cause);
+                        // 将移除的数据移到过期缓存中
+                        if (value != null && staleCache != null) {
+                            staleCache.put((String) key, (CachedDataWrapper) value);
+                        }
+                    } catch (Exception e) {
+                        log.warn("处理缓存移除事件失败: {}", e.getMessage());
+                    }
+                })
                 .build();
+        
+        // 初始化调度器 - 修复异步刷新问题
+        scheduler = Executors.newScheduledThreadPool(2, r -> {
+            Thread t = new Thread(r, "cache-refresh-" + System.currentTimeMillis());
+            t.setDaemon(true);
+            return t;
+        });
+        
+        // 启动基本监控任务
+        startBasicMonitoring();
                 
-        log.info("✅ 基本缓存创建成功 - 主缓存: {}, 备用缓存: {}", 
-                primaryCache.estimatedSize(), staleCache.estimatedSize());
+        log.info("✅ 基本缓存创建成功 - 主缓存: {}, 备用缓存: {}, 调度器: {}", 
+                primaryCache.estimatedSize(), staleCache.estimatedSize(), 
+                scheduler != null ? "已启动" : "未启动");
+    }
+
+    /**
+     * 启动基本监控任务
+     */
+    private void startBasicMonitoring() {
+        if (scheduler != null) {
+            // 缓存统计报告任务 - 每10分钟报告一次
+            scheduler.scheduleAtFixedRate(() -> {
+                try {
+                    reportCacheStats();
+                } catch (Exception e) {
+                    log.error("缓存统计报告失败", e);
+                }
+            }, 10, 10, TimeUnit.MINUTES);
+        }
     }
 
     /**
@@ -162,61 +202,60 @@ public class SpecificDataCacheManager {
     public Mono<SpecificDataResponse> getCachedData(String cacheKey, 
                                                    SpecificDataRequest request, 
                                                    String sourceId) {
-        return Mono.fromCallable(() -> {
+        return Mono.defer(() -> {
             try {
                 // 检查缓存是否已初始化
                 if (primaryCache == null) {
-                    log.debug("缓存尚未初始化，返回null");
-                    return null;
+                    log.debug("缓存尚未初始化，返回空");
+                    return Mono.empty();
                 }
-            
-            CachedDataWrapper cached = primaryCache.getIfPresent(cacheKey);
-            
-            if (cached != null) {
-                try {
-                    if (cacheStrategyConfig != null) {
-                        CacheStrategyConfig.CacheRuleConfig rule = cacheStrategyConfig.getCacheRuleConfig(
-                                extractFirstCode(request), extractFirstIndex(request), sourceId);
-                                
-                        if (isCacheValid(cached, rule)) {
-                            log.debug("命中有效缓存: {}", cacheKey);
-                            return cached.getData();
-                        } else if (rule.isAllowStaleData()) {
-                            log.debug("命中过期缓存，但允许返回过期数据: {}", cacheKey);
-                            // 触发异步刷新
-                            triggerAsyncRefresh(cacheKey, request, sourceId);
-                            return cached.getData();
+
+                CachedDataWrapper cached = primaryCache.getIfPresent(cacheKey);
+
+                if (cached != null) {
+                    try {
+                        if (cacheStrategyConfig != null) {
+                            CacheStrategyConfig.CacheRuleConfig rule = cacheStrategyConfig.getCacheRuleConfig(
+                                    extractFirstCode(request), extractFirstIndex(request), sourceId);
+
+                            if (isCacheValid(cached, rule)) {
+                                log.debug("命中有效缓存: {}", cacheKey);
+                                return Mono.just(cached.getData());
+                            } else if (rule.isAllowStaleData()) {
+                                log.debug("命中过期缓存，但允许返回过期数据: {}", cacheKey);
+                                // 触发异步刷新
+                                triggerAsyncRefresh(cacheKey, request, sourceId);
+                                return Mono.just(cached.getData());
+                            }
+                        } else {
+                            // 配置未加载时，简单返回缓存数据
+                            log.debug("配置未加载，直接返回缓存数据: {}", cacheKey);
+                            return Mono.just(cached.getData());
                         }
-                    } else {
-                        // 配置未加载时，简单返回缓存数据
-                        log.debug("配置未加载，直接返回缓存数据: {}", cacheKey);
-                        return cached.getData();
+                    } catch (Exception e) {
+                        log.error("处理缓存数据时出错: {} - {}", cacheKey, e.getMessage(), e);
+                        // 即使出错也尝试返回缓存数据
+                        return Mono.just(cached.getData());
+                    }
+                }
+
+                // 检查过期缓存
+                try {
+                    CachedDataWrapper stale = staleCache.getIfPresent(cacheKey);
+                    if (stale != null) {
+                        log.debug("从过期缓存获取数据用于降级: {}", cacheKey);
+                        return Mono.just(stale.getData());
                     }
                 } catch (Exception e) {
-                    log.error("处理缓存数据时出错: {} - {}", cacheKey, e.getMessage(), e);
-                    // 即使出错也尝试返回缓存数据
-                    return cached.getData();
+                    log.error("访问过期缓存时出错: {} - {}", cacheKey, e.getMessage(), e);
                 }
-            }
-            
-            // 检查过期缓存
-            try {
-                CachedDataWrapper stale = staleCache.getIfPresent(cacheKey);
-                if (stale != null) {
-                    log.debug("从过期缓存获取数据用于降级: {}", cacheKey);
-                    return stale.getData();
-                }
+
+                return Mono.empty();
             } catch (Exception e) {
-                log.error("访问过期缓存时出错: {} - {}", cacheKey, e.getMessage(), e);
+                log.error("缓存操作失败，返回空: {}", e.getMessage());
+                return Mono.empty();
             }
-            
-            return null;
-            
-            } catch (Exception e) {
-                log.error("缓存操作失败，返回null: {}", e.getMessage());
-                return null;
-            }
-        }).subscribeOn(Schedulers.boundedElastic());
+        }); // 移除 subscribeOn - Caffeine 缓存操作是非阻塞的
     }
 
     /**
@@ -297,41 +336,56 @@ public class SpecificDataCacheManager {
         if (refreshing.compareAndSet(false, true)) {
             log.debug("触发异步缓存刷新: {}", cacheKey);
             
-            scheduler.schedule(() -> {
-                try {
-                    // 异步获取新数据
-                    dataSupplier.get()
-                            .doOnSuccess(newData -> {
-                                if (newData != null && newData.statusCode() == 0) {
-                                    // 获取缓存规则
-                                    if (cacheStrategyConfig != null) {
-                                        CacheStrategyConfig.CacheRuleConfig rule = cacheStrategyConfig.getCacheRuleConfig(
-                                                extractFirstCode(request), extractFirstIndex(request), sourceId);
-                                        // 更新缓存
-                                        updateCache(cacheKey, newData, rule);
+            // 检查调度器是否可用
+            if (scheduler == null) {
+                log.warn("调度器未初始化，跳过异步刷新: {}", cacheKey);
+                refreshing.set(false);
+                activeRefreshTasks.remove(cacheKey);
+                return;
+            }
+            
+            try {
+                scheduler.schedule(() -> {
+                    try {
+                        // 异步获取新数据
+                        dataSupplier.get()
+                                .timeout(Duration.ofSeconds(10)) // 添加刷新超时保护
+                                .doOnSuccess(newData -> {
+                                    if (newData != null && newData.statusCode() == ApiStatus.SUCCESS_CODE) {
+                                        // 获取缓存规则
+                                        if (cacheStrategyConfig != null) {
+                                            CacheStrategyConfig.CacheRuleConfig rule = cacheStrategyConfig.getCacheRuleConfig(
+                                                    extractFirstCode(request), extractFirstIndex(request), sourceId);
+                                            // 更新缓存
+                                            updateCache(cacheKey, newData, rule);
+                                        } else {
+                                            // 使用默认规则更新缓存
+                                            updateCache(cacheKey, newData, null);
+                                        }
+                                        log.debug("异步刷新缓存成功: {}", cacheKey);
                                     } else {
-                                        // 使用默认规则更新缓存
-                                        updateCache(cacheKey, newData, null);
+                                        log.warn("异步刷新获取到无效数据: {}", cacheKey);
                                     }
-                                    log.debug("异步刷新缓存成功: {}", cacheKey);
-                                } else {
-                                    log.warn("异步刷新获取到无效数据: {}", cacheKey);
-                                }
-                            })
-                            .doOnError(error -> {
-                                log.error("异步刷新缓存失败: {} - {}", cacheKey, error.getMessage(), error);
-                            })
-                            .doFinally(signal -> {
-                                refreshing.set(false);
-                                activeRefreshTasks.remove(cacheKey);
-                            })
-                            .subscribe();
-                } catch (Exception e) {
-                    log.error("异步刷新任务异常: {} - {}", cacheKey, e.getMessage(), e);
-                    refreshing.set(false);
-                    activeRefreshTasks.remove(cacheKey);
-                }
-            }, 100, TimeUnit.MILLISECONDS);
+                                })
+                                .doOnError(error -> {
+                                    log.error("异步刷新缓存失败: {} - {}", cacheKey, error.getMessage());
+                                })
+                                .doFinally(signal -> {
+                                    refreshing.set(false);
+                                    activeRefreshTasks.remove(cacheKey);
+                                })
+                                .subscribe();
+                    } catch (Exception e) {
+                        log.error("异步刷新任务异常: {} - {}", cacheKey, e.getMessage(), e);
+                        refreshing.set(false);
+                        activeRefreshTasks.remove(cacheKey);
+                    }
+                }, 100, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                log.error("调度异步刷新任务失败: {} - {}", cacheKey, e.getMessage());
+                refreshing.set(false);
+                activeRefreshTasks.remove(cacheKey);
+            }
         }
     }
     

@@ -2,6 +2,7 @@ package com.bililee.demo.fluxapi.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import java.util.List;
 import java.util.Map;
@@ -123,8 +124,8 @@ public record SpecificDataResponse(
     public static SpecificDataResponse success(SpecificDataResult data) {
         return SpecificDataResponse.builder()
                 .data(data)
-                .statusCode(0)
-                .statusMsg("success")
+                .statusCode(ApiStatus.SUCCESS_CODE)
+                .statusMsg(ApiStatus.SUCCESS_MSG)
                 .build();
     }
 
@@ -141,5 +142,54 @@ public record SpecificDataResponse(
                 .statusCode(statusCode)
                 .statusMsg(statusMsg)
                 .build();
+    }
+
+    /**
+     * 创建内部服务器错误响应
+     * 
+     * @return 包含500状态码和对应错误消息的响应对象
+     */
+    public static SpecificDataResponse internalServerError() {
+        return error(ApiStatus.INTERNAL_SERVER_ERROR_CODE, ApiStatus.INTERNAL_SERVER_ERROR_MSG);
+    }
+
+    /**
+     * 创建服务不可用响应
+     * 
+     * @return 包含503状态码和对应错误消息的响应对象
+     */
+    public static SpecificDataResponse serviceUnavailable() {
+        return error(ApiStatus.SERVICE_UNAVAILABLE_CODE, ApiStatus.SERVICE_UNAVAILABLE_MSG);
+    }
+
+    /**
+     * 创建远程服务错误响应
+     * 
+     * @return 包含1002状态码和对应错误消息的响应对象
+     */
+    public static SpecificDataResponse remoteServiceError() {
+        return error(ApiStatus.REMOTE_SERVICE_ERROR_CODE, ApiStatus.REMOTE_SERVICE_ERROR_MSG);
+    }
+
+    /**
+     * 创建超时错误响应
+     * 
+     * @return 包含1004状态码和对应错误消息的响应对象
+     */
+    public static SpecificDataResponse timeoutError() {
+        return error(ApiStatus.TIMEOUT_ERROR_CODE, ApiStatus.TIMEOUT_ERROR_MSG);
+    }
+
+    /**
+     * 创建空数据的成功响应
+     * 
+     * @return 包含成功状态码和空数据的响应对象
+     */
+    public static SpecificDataResponse success() {
+        return success(SpecificDataResult.builder()
+                .indexes(List.of())
+                .data(List.of())
+                .total(0)
+                .build());
     }
 }

@@ -57,13 +57,19 @@ public class RequestDeduplicationManager {
             incrementWaitingCount(requestKey);
             
             return existingSink.asMono()
-                    .timeout(Duration.ofSeconds(30)) // 等待超时保护
+                    .timeout(Duration.ofSeconds(10)) // 缩短等待超时时间
                     .doOnSuccess(response -> {
                         log.debug("请求去重 - 获得广播结果: {}", requestKey);
                         decrementWaitingCount(requestKey);
                     })
                     .doOnError(error -> {
-                        log.warn("请求去重 - 等待失败: {} - {}", requestKey, error.getMessage());
+                        if (error instanceof java.util.concurrent.TimeoutException) {
+                            log.warn("请求去重 - 等待超时，将移除阻塞的首个请求: {}", requestKey);
+                            // 清理可能阻塞的请求
+                            pendingRequests.remove(requestKey);
+                        } else {
+                            log.warn("请求去重 - 等待失败: {} - {}", requestKey, error.getMessage());
+                        }
                         decrementWaitingCount(requestKey);
                     });
         }
@@ -78,9 +84,15 @@ public class RequestDeduplicationManager {
             incrementWaitingCount(requestKey);
             
             return previousSink.asMono()
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(10))
                     .doOnSuccess(response -> decrementWaitingCount(requestKey))
-                    .doOnError(error -> decrementWaitingCount(requestKey));
+                    .doOnError(error -> {
+                        if (error instanceof java.util.concurrent.TimeoutException) {
+                            log.warn("请求去重 - 并发等待超时，清理阻塞请求: {}", requestKey);
+                            pendingRequests.remove(requestKey);
+                        }
+                        decrementWaitingCount(requestKey);
+                    });
         }
         
         // 当前线程负责执行实际请求
@@ -88,6 +100,7 @@ public class RequestDeduplicationManager {
         incrementProcessingCount(requestKey);
         
         return actualSupplier.get()
+                .timeout(Duration.ofSeconds(9)) // 为首个请求添加超时保护，略大于弹性服务的8秒
                 .doOnSuccess(response -> {
                     log.debug("请求去重 - 首个请求执行成功，广播结果: {}", requestKey);
                     sink.tryEmitValue(response);
@@ -95,7 +108,11 @@ public class RequestDeduplicationManager {
                     updateSuccessStats(requestKey);
                 })
                 .doOnError(error -> {
-                    log.warn("请求去重 - 首个请求执行失败，广播错误: {} - {}", requestKey, error.getMessage());
+                    if (error instanceof java.util.concurrent.TimeoutException) {
+                        log.error("请求去重 - 首个请求执行超时，广播超时错误: {}", requestKey);
+                    } else {
+                        log.warn("请求去重 - 首个请求执行失败，广播错误: {} - {}", requestKey, error.getMessage());
+                    }
                     sink.tryEmitError(error);
                     pendingRequests.remove(requestKey);
                     updateErrorStats(requestKey);

@@ -14,6 +14,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import java.util.List;
 
@@ -62,7 +63,7 @@ class SpecificDataControllerTest {
                 .expectHeader().contentType(MediaType.APPLICATION_JSON)
                 .expectBody(SpecificDataResponse.class)
                 .value(actualResponse -> {
-                    assert actualResponse.statusCode().equals(0);
+                    assert actualResponse.statusCode().equals(ApiStatus.SUCCESS_CODE);
                     assert actualResponse.statusMsg().equals("success");
                     assert actualResponse.data().total().equals(2);
                 });
@@ -87,7 +88,7 @@ class SpecificDataControllerTest {
                 .expectStatus().isOk()
                 .expectBody(SpecificDataResponse.class)
                 .value(actualResponse -> {
-                    assert actualResponse.statusCode().equals(0);
+                    assert actualResponse.statusCode().equals(ApiStatus.SUCCESS_CODE);
                 });
     }
 
@@ -433,7 +434,7 @@ class SpecificDataControllerTest {
 
     private SpecificDataResponse createSuccessResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)
@@ -445,7 +446,7 @@ class SpecificDataControllerTest {
 
     private SpecificDataResponse createDetailedResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)

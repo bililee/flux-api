@@ -22,6 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -485,7 +486,7 @@ class RemoteSpecificDataClientTest {
 
     private SpecificDataResponse createTestResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)

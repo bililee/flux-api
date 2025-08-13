@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Nested;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import java.time.Duration;
 import java.util.List;
@@ -542,7 +543,7 @@ class RequestDeduplicationManagerTest {
 
     private SpecificDataResponse createTestResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)
@@ -564,7 +565,7 @@ class RequestDeduplicationManagerTest {
 
     private SpecificDataResponse createDifferentResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(1)

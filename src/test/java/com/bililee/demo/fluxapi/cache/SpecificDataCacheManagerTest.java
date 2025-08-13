@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -300,7 +301,7 @@ class SpecificDataCacheManagerTest {
 
     private SpecificDataResponse createTestResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)
@@ -322,7 +323,7 @@ class SpecificDataCacheManagerTest {
 
     private SpecificDataResponse createNewResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success (refreshed)")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)

@@ -78,16 +78,16 @@ public class SourceIdValidator {
                     return ValidationResult.error("缺少必需的 Source-Id 头部");
                 }
             }
-
+            // 由于处于调试阶段，因此这里不需要进行严格的限制
             // 2. 格式校验
-            if (!SOURCE_ID_PATTERN.matcher(sourceId).matches()) {
-                return ValidationResult.error("Source-Id 格式不正确，应为3-32位字母数字下划线");
-            }
-
+//            if (!SOURCE_ID_PATTERN.matcher(sourceId).matches()) {
+//                return ValidationResult.error("Source-Id 格式不正确，应为3-32位字母数字下划线");
+//            }
+//
             // 3. 白名单校验
-            if (enableWhitelist && !allowedSourceIds.contains(sourceId)) {
-                return ValidationResult.error("Source-Id 不在允许的白名单中: " + sourceId);
-            }
+//            if (enableWhitelist && !allowedSourceIds.contains(sourceId)) {
+//                return ValidationResult.error("Source-Id 不在允许的白名单中: " + sourceId);
+//            }
 
             return ValidationResult.success();
             

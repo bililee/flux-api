@@ -6,11 +6,17 @@ import com.bililee.demo.fluxapi.config.CacheStrategyConfig;
 import com.bililee.demo.fluxapi.config.source.ConfigSource;
 import com.bililee.demo.fluxapi.monitoring.CacheMonitoringService;
 import com.bililee.demo.fluxapi.monitoring.impl.ConsoleMetricsCollector;
+import com.bililee.demo.fluxapi.resilience.CircuitBreakerManager;
+import com.bililee.demo.fluxapi.resilience.ResilienceService;
+import com.bililee.demo.fluxapi.resilience.ThreadPoolManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
@@ -43,6 +49,9 @@ public class MonitoringController {
 
     @Autowired(required = false)
     private ConsoleMetricsCollector consoleMetricsCollector;
+
+    @Autowired(required = false)
+    private ResilienceService resilienceService;
 
     /**
      * 健康检查端点
@@ -188,4 +197,128 @@ public class MonitoringController {
             return ResponseEntity.ok(system);
         });
     }
+
+    /**
+     * 断路器状态端点
+     */
+    @GetMapping("/circuit-breaker/{sourceId}")
+    public Mono<ResponseEntity<CircuitBreakerStatusResponse>> getCircuitBreakerStatus(@PathVariable String sourceId) {
+        return Mono.fromCallable(() -> {
+            try {
+                if (resilienceService != null) {
+                    CircuitBreakerManager.CircuitBreakerState state = resilienceService.getCircuitBreakerState(sourceId);
+                    CircuitBreakerStatusResponse response = new CircuitBreakerStatusResponse(sourceId, state.name());
+                    return ResponseEntity.ok(response);
+                } else {
+                    CircuitBreakerStatusResponse response = new CircuitBreakerStatusResponse(sourceId, "SERVICE_UNAVAILABLE");
+                    return ResponseEntity.ok(response);
+                }
+            } catch (Exception e) {
+                log.error("获取断路器状态失败: {}", e.getMessage(), e);
+                CircuitBreakerStatusResponse response = new CircuitBreakerStatusResponse(sourceId, "ERROR");
+                return ResponseEntity.ok(response);
+            }
+        });
+    }
+
+    /**
+     * 线程池状态端点
+     */
+    @GetMapping("/thread-pool")
+    public Mono<ResponseEntity<ThreadPoolManager.ThreadPoolStats>> getThreadPoolStats() {
+        return Mono.fromCallable(() -> {
+            try {
+                if (resilienceService != null) {
+                    ThreadPoolManager.ThreadPoolStats stats = resilienceService.getThreadPoolStats();
+                    return ResponseEntity.ok(stats);
+                } else {
+                    ThreadPoolManager.ThreadPoolStats emptyStats = 
+                            new ThreadPoolManager.ThreadPoolStats(0, 0, 0, 0, 0);
+                    return ResponseEntity.ok(emptyStats);
+                }
+            } catch (Exception e) {
+                log.error("获取线程池状态失败: {}", e.getMessage(), e);
+                ThreadPoolManager.ThreadPoolStats errorStats = 
+                        new ThreadPoolManager.ThreadPoolStats(0, 0, 0, 0, 0);
+                return ResponseEntity.ok(errorStats);
+            }
+        });
+    }
+
+    /**
+     * 重置断路器端点
+     */
+    @PostMapping("/circuit-breaker/{sourceId}/reset")
+    public Mono<ResponseEntity<String>> resetCircuitBreaker(@PathVariable String sourceId) {
+        return Mono.fromCallable(() -> {
+            try {
+                if (resilienceService != null) {
+                    resilienceService.resetCircuitBreaker(sourceId);
+                    log.info("断路器重置成功: {}", sourceId);
+                    return ResponseEntity.ok("断路器重置成功: " + sourceId);
+                } else {
+                    return ResponseEntity.ok("弹性服务不可用");
+                }
+            } catch (Exception e) {
+                log.error("断路器重置失败: {}, 错误: {}", sourceId, e.getMessage(), e);
+                return ResponseEntity.ok("断路器重置失败: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * 系统综合健康检查端点
+     */
+    @GetMapping("/health/comprehensive")
+    public Mono<ResponseEntity<SystemHealthResponse>> getComprehensiveHealth(
+            @RequestParam(value = "sourceId", defaultValue = "default") String sourceId) {
+        return Mono.fromCallable(() -> {
+            try {
+                String circuitBreakerState = "UNKNOWN";
+                ThreadPoolManager.ThreadPoolStats threadPoolStats = null;
+                
+                if (resilienceService != null) {
+                    CircuitBreakerManager.CircuitBreakerState state = 
+                            resilienceService.getCircuitBreakerState(sourceId);
+                    circuitBreakerState = state.name();
+                    threadPoolStats = resilienceService.getThreadPoolStats();
+                }
+                
+                SpecificDataCacheManager.CacheStatsInfo cacheStats = 
+                        cacheManager.getCacheStatsInfo();
+
+                SystemHealthResponse response = new SystemHealthResponse(
+                        sourceId,
+                        circuitBreakerState,
+                        threadPoolStats,
+                        cacheStats,
+                        System.currentTimeMillis()
+                );
+
+                return ResponseEntity.ok(response);
+            } catch (Exception e) {
+                log.error("获取系统健康状态失败: {}", e.getMessage(), e);
+                SystemHealthResponse errorResponse = new SystemHealthResponse(
+                        sourceId, "ERROR", null, null, System.currentTimeMillis()
+                );
+                return ResponseEntity.ok(errorResponse);
+            }
+        });
+    }
+
+    /**
+     * 断路器状态响应
+     */
+    public record CircuitBreakerStatusResponse(String sourceId, String state) {}
+
+    /**
+     * 系统健康状态响应
+     */
+    public record SystemHealthResponse(
+            String sourceId,
+            String circuitBreakerState,
+            ThreadPoolManager.ThreadPoolStats threadPoolStats,
+            SpecificDataCacheManager.CacheStatsInfo cacheStats,
+            long timestamp
+    ) {}
 }

@@ -5,6 +5,7 @@ import com.bililee.demo.fluxapi.exception.ApiServerException;
 import com.bililee.demo.fluxapi.exception.ApiTimeoutException;
 import com.bililee.demo.fluxapi.model.dto.SpecificDataRequest;
 import com.bililee.demo.fluxapi.model.dto.SpecificDataResponse;
+import com.bililee.demo.fluxapi.resilience.ResilienceService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
@@ -30,6 +30,9 @@ public class RemoteSpecificDataClient {
     @Autowired
     private ConfigSource configSource;
 
+    @Autowired
+    private ResilienceService resilienceService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private WebClient webClient;
     private RemoteServiceConfig config;
@@ -42,39 +45,56 @@ public class RemoteSpecificDataClient {
     }
 
     /**
-     * 调用远程服务获取特定数据
+     * 调用远程服务获取特定数据（支持Source-Id）
      */
-    public Mono<SpecificDataResponse> fetchSpecificData(SpecificDataRequest request) {
-        log.info("调用远程服务获取特定数据，请求代码数量: {}", 
+    public Mono<SpecificDataResponse> fetchSpecificData(SpecificDataRequest request, String sourceId) {
+        String actualSourceId = sourceId != null ? sourceId : "default";
+        
+        log.info("调用远程服务获取特定数据 - sourceId: {}, 请求代码数量: {}", 
+                actualSourceId,
                 request.codeSelectors().include().stream()
                         .mapToInt(selector -> selector.values().size()).sum());
 
-        return webClient.post()
-                .uri(config.getEndpoint())
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(SpecificDataResponse.class)
-                .timeout(config.getTimeout())
-                .retryWhen(Retry.backoff(config.getMaxRetries(), config.getRetryDelay())
-                        .filter(this::isRetryableException))
-                .doOnSuccess(response -> log.info("远程服务调用成功，返回数据量: {}", 
-                        response.data() != null ? response.data().total() : 0))
-                .doOnError(error -> log.error("远程服务调用失败: {}", error.getMessage(), error))
-                .onErrorMap(this::mapException);
+        return resilienceService.executeResilientCall(
+                actualSourceId, 
+                "fetch_specific_data",
+                () -> executeRawRemoteCall(request)
+        )
+        .doOnSuccess(response -> log.info("弹性远程服务调用成功 - sourceId: {}, 返回数据量: {}", 
+                actualSourceId, response.data() != null ? response.data().total() : 0))
+        .doOnError(error -> log.error("弹性远程服务调用失败 - sourceId: {}, 错误: {}", 
+                actualSourceId, error.getMessage()));
     }
 
     /**
-     * 健康检查
+     * 调用远程服务获取特定数据（兼容原接口）
+     */
+    public Mono<SpecificDataResponse> fetchSpecificData(SpecificDataRequest request) {
+        return fetchSpecificData(request, "default");
+    }
+
+    /**
+     * 健康检查（支持Source-Id）
+     */
+    public Mono<Boolean> healthCheck(String sourceId) {
+        String actualSourceId = sourceId != null ? sourceId : "default";
+        
+        return resilienceService.healthCheck(actualSourceId, () ->
+                webClient.get()
+                        .uri("/health")
+                        .retrieve()
+                        .bodyToMono(String.class)
+                        .map(response -> true)
+                        .onErrorReturn(false)
+        )
+        .doOnNext(healthy -> log.debug("远程服务健康状态 - sourceId: {}, 健康: {}", actualSourceId, healthy));
+    }
+
+    /**
+     * 健康检查（兼容原接口）
      */
     public Mono<Boolean> healthCheck() {
-        return webClient.get()
-                .uri("/health")
-                .retrieve()
-                .bodyToMono(String.class)
-                .timeout(Duration.ofSeconds(3))
-                .map(response -> true)
-                .onErrorReturn(false)
-                .doOnNext(healthy -> log.debug("远程服务健康状态: {}", healthy));
+        return healthCheck("default");
     }
 
     /**
@@ -93,7 +113,7 @@ public class RemoteSpecificDataClient {
         if (config == null) {
             // 使用默认配置
             config = new RemoteServiceConfig(
-                    "https://remote-datacenter.example.com/api",
+                    "http://127.0.0.1:8086",
                     "/v1/specific_data",
                     Duration.ofSeconds(5),
                     2,
@@ -146,16 +166,15 @@ public class RemoteSpecificDataClient {
     }
 
     /**
-     * 判断异常是否可重试
+     * 执行原始远程调用（无弹性策略）
      */
-    private boolean isRetryableException(Throwable throwable) {
-        if (throwable instanceof WebClientResponseException webEx) {
-            HttpStatus status = (HttpStatus) webEx.getStatusCode();
-            // 5xx错误和408超时错误可重试
-            return status.is5xxServerError() || status == HttpStatus.REQUEST_TIMEOUT;
-        }
-        // 超时异常可重试
-        return throwable instanceof java.util.concurrent.TimeoutException;
+    private Mono<SpecificDataResponse> executeRawRemoteCall(SpecificDataRequest request) {
+        return webClient.post()
+                .uri(config.getEndpoint())
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(SpecificDataResponse.class)
+                .onErrorMap(this::mapException);
     }
 
     /**
@@ -201,8 +220,6 @@ public class RemoteSpecificDataClient {
     ) {
         public String getBaseUrl() { return baseUrl; }
         public String getEndpoint() { return endpoint; }
-        public Duration getTimeout() { return timeout; }
-        public int getMaxRetries() { return maxRetries; }
-        public Duration getRetryDelay() { return retryDelay; }
+        // timeout, maxRetries, retryDelay 已移到ResilienceService中管理
     }
 }

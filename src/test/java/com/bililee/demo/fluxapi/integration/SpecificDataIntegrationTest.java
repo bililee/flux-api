@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import com.bililee.demo.fluxapi.response.ApiStatus;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -116,7 +117,7 @@ class SpecificDataIntegrationTest {
                     .expectHeader().contentType(MediaType.APPLICATION_JSON)
                     .expectBody(SpecificDataResponse.class)
                     .value(response -> {
-                        assertThat(response.statusCode()).isEqualTo(0);
+                        assertThat(response.statusCode()).isEqualTo(ApiStatus.SUCCESS_CODE);
                         assertThat(response.statusMsg()).isEqualTo("success");
                         assertThat(response.data()).isNotNull();
                         assertThat(response.data().total()).isEqualTo(2);
@@ -148,7 +149,7 @@ class SpecificDataIntegrationTest {
                     .exchange()
                     .expectStatus().isOk()
                     .expectBody(SpecificDataResponse.class)
-                    .value(response -> assertThat(response.statusCode()).isEqualTo(0));
+                    .value(response -> assertThat(response.statusCode()).isEqualTo(ApiStatus.SUCCESS_CODE));
 
             // When - 第二次相同请求（应该使用缓存）
             webTestClient.post()
@@ -159,7 +160,7 @@ class SpecificDataIntegrationTest {
                     .exchange()
                     .expectStatus().isOk()
                     .expectBody(SpecificDataResponse.class)
-                    .value(response -> assertThat(response.statusCode()).isEqualTo(0));
+                    .value(response -> assertThat(response.statusCode()).isEqualTo(ApiStatus.SUCCESS_CODE));
 
             // Then - 验证远程服务只被调用一次
             assertThat(mockRemoteServer.getRequestCount()).isEqualTo(1);
@@ -402,15 +403,15 @@ class SpecificDataIntegrationTest {
             // Then - 所有请求都应该成功
             request1.expectStatus().isOk()
                     .expectBody(SpecificDataResponse.class)
-                    .value(response -> assertThat(response.statusCode()).isEqualTo(0));
+                    .value(response -> assertThat(response.statusCode()).isEqualTo(ApiStatus.SUCCESS_CODE));
 
             request2.expectStatus().isOk()
                     .expectBody(SpecificDataResponse.class)
-                    .value(response -> assertThat(response.statusCode()).isEqualTo(0));
+                    .value(response -> assertThat(response.statusCode()).isEqualTo(ApiStatus.SUCCESS_CODE));
 
             request3.expectStatus().isOk()
                     .expectBody(SpecificDataResponse.class)
-                    .value(response -> assertThat(response.statusCode()).isEqualTo(0));
+                    .value(response -> assertThat(response.statusCode()).isEqualTo(ApiStatus.SUCCESS_CODE));
 
             // 验证远程服务只被调用一次（请求去重生效）
             assertThat(mockRemoteServer.getRequestCount()).isEqualTo(1);
@@ -507,7 +508,7 @@ class SpecificDataIntegrationTest {
                     .expectBody(SpecificDataResponse.class)
                     .value(response -> {
                         // 即使远程服务失败，也应该返回缓存的成功数据
-                        assertThat(response.statusCode()).isEqualTo(0);
+                        assertThat(response.statusCode()).isEqualTo(ApiStatus.SUCCESS_CODE);
                         assertThat(response.data()).isNotNull();
                     });
         }
@@ -604,7 +605,7 @@ class SpecificDataIntegrationTest {
 
     private SpecificDataResponse createTestResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(2)
@@ -635,7 +636,7 @@ class SpecificDataIntegrationTest {
 
     private SpecificDataResponse createDifferentResponse() {
         return SpecificDataResponse.builder()
-                .statusCode(0)
+                .statusCode(ApiStatus.SUCCESS_CODE)
                 .statusMsg("success")
                 .data(SpecificDataResponse.SpecificDataResult.builder()
                         .total(1)
