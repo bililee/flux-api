@@ -21,11 +21,10 @@ import java.util.function.Supplier;
 public class RequestDeduplicationManager {
 
     /**
-     * 正在处理的请求映射
-     * Key: 请求唯一标识
-     * Value: 结果Sink，用于广播给所有等待的请求
+     * 等待中的请求映射
+     * key: requestKey, value: 完成信号的Sink (Boolean表示首个请求是否成功完成)
      */
-    private final ConcurrentMap<String, Sinks.One<SpecificDataResponse>> pendingRequests = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Sinks.One<Boolean>> pendingRequests = new ConcurrentHashMap<>();
 
     /**
      * 请求统计
@@ -34,11 +33,11 @@ public class RequestDeduplicationManager {
 
     /**
      * 执行去重请求
-     * 如果是首个请求，则执行actualSupplier；否则等待首个请求的结果
+     * 如果是首个请求，则执行actualSupplier；否则等待首个请求完成后重新执行缓存策略
      *
      * @param request 请求对象
      * @param sourceId 业务来源ID
-     * @param actualSupplier 实际执行逻辑的提供者
+     * @param actualSupplier 实际执行逻辑的提供者（缓存策略）
      * @return 响应结果
      */
     public Mono<SpecificDataResponse> executeDeduplicatedRequest(
@@ -49,17 +48,22 @@ public class RequestDeduplicationManager {
         String requestKey = generateRequestKey(request, sourceId);
         
         // 检查是否已有相同请求正在处理
-        Sinks.One<SpecificDataResponse> existingSink = pendingRequests.get(requestKey);
+        Sinks.One<Boolean> existingSink = pendingRequests.get(requestKey);
         
         if (existingSink != null) {
-            // 有相同请求正在处理，加入等待队列
-            log.debug("请求去重 - 加入等待队列: {}", requestKey);
+            // 有相同请求正在处理，等待首个请求完成后重新执行缓存策略
+            log.debug("请求去重 - 等待首个请求完成后从缓存获取: {}", requestKey);
             incrementWaitingCount(requestKey);
             
             return existingSink.asMono()
-                    .timeout(Duration.ofSeconds(10)) // 缩短等待超时时间
+                    .timeout(Duration.ofSeconds(10)) // 等待首个请求完成
+                    .then(Mono.defer(() -> {
+                        // 首个请求完成后，重新执行缓存策略（应该命中缓存）
+                        log.debug("请求去重 - 首个请求已完成，重新执行缓存策略: {}", requestKey);
+                        return actualSupplier.get();
+                    }))
                     .doOnSuccess(response -> {
-                        log.debug("请求去重 - 获得广播结果: {}", requestKey);
+                        log.debug("请求去重 - 从缓存获取数据成功: {}", requestKey);
                         decrementWaitingCount(requestKey);
                     })
                     .doOnError(error -> {
@@ -75,16 +79,21 @@ public class RequestDeduplicationManager {
         }
         
         // 首个请求，创建新的Sink并执行实际逻辑
-        Sinks.One<SpecificDataResponse> sink = Sinks.one();
-        Sinks.One<SpecificDataResponse> previousSink = pendingRequests.putIfAbsent(requestKey, sink);
+        Sinks.One<Boolean> sink = Sinks.one();
+        Sinks.One<Boolean> previousSink = pendingRequests.putIfAbsent(requestKey, sink);
         
         if (previousSink != null) {
-            // 并发情况下，其他线程已经创建了Sink，加入等待队列
-            log.debug("请求去重 - 并发情况下加入等待队列: {}", requestKey);
+            // 并发情况下，其他线程已经创建了Sink，等待首个请求完成后重新执行缓存策略
+            log.debug("请求去重 - 并发情况下等待首个请求完成: {}", requestKey);
             incrementWaitingCount(requestKey);
             
             return previousSink.asMono()
                     .timeout(Duration.ofSeconds(10))
+                    .then(Mono.defer(() -> {
+                        // 首个请求完成后，重新执行缓存策略
+                        log.debug("请求去重 - 并发情况下重新执行缓存策略: {}", requestKey);
+                        return actualSupplier.get();
+                    }))
                     .doOnSuccess(response -> decrementWaitingCount(requestKey))
                     .doOnError(error -> {
                         if (error instanceof java.util.concurrent.TimeoutException) {
@@ -102,18 +111,18 @@ public class RequestDeduplicationManager {
         return actualSupplier.get()
                 .timeout(Duration.ofSeconds(9)) // 为首个请求添加超时保护，略大于弹性服务的8秒
                 .doOnSuccess(response -> {
-                    log.debug("请求去重 - 首个请求执行成功，广播结果: {}", requestKey);
-                    sink.tryEmitValue(response);
+                    log.debug("请求去重 - 首个请求执行成功，通知等待请求: {}", requestKey);
+                    sink.tryEmitValue(true); // 通知等待的请求可以执行了
                     pendingRequests.remove(requestKey);
                     updateSuccessStats(requestKey);
                 })
                 .doOnError(error -> {
                     if (error instanceof java.util.concurrent.TimeoutException) {
-                        log.error("请求去重 - 首个请求执行超时，广播超时错误: {}", requestKey);
+                        log.error("请求去重 - 首个请求执行超时，通知等待请求失败: {}", requestKey);
                     } else {
-                        log.warn("请求去重 - 首个请求执行失败，广播错误: {} - {}", requestKey, error.getMessage());
+                        log.warn("请求去重 - 首个请求执行失败，通知等待请求失败: {} - {}", requestKey, error.getMessage());
                     }
-                    sink.tryEmitError(error);
+                    sink.tryEmitError(error); // 首个请求失败，等待的请求也失败
                     pendingRequests.remove(requestKey);
                     updateErrorStats(requestKey);
                 })
